@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "292692311999",
+    "project_id": "shageldi-dev",
+    "storage_bucket": "shageldi-dev.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:292692311999:android:631fcf567123db3489ab0a",
+        "android_client_info": {
+          "package_name": "com.github.olga_yakovleva.rhvoice.android"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDmcPEe4z58T331GnlkZKSggZ2zdDKw51M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

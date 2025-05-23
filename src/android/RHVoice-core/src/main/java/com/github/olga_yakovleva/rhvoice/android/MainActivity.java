@@ -16,14 +16,29 @@
 package com.github.olga_yakovleva.rhvoice.android;
 
 import androidx.activity.EdgeToEdge;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.fragment.app.FragmentTransaction;
 
+import android.os.Build;
 import android.os.Bundle;
+import android.speech.tts.TextToSpeech;
 import android.view.Menu;
+import android.view.View;
+import android.widget.EditText;
+
+import com.github.olga_yakovleva.rhvoice.compose.MainFragment;
+import com.github.olga_yakovleva.rhvoice.compose.MainFragmentListener;
+import com.google.android.material.bottomsheet.BottomSheetBehavior;
+
+import java.util.Locale;
 
 public final class MainActivity extends AppCompatActivity implements AvailableLanguagesFragment.Listener, AvailableVoicesFragment.Listener, ConfirmVoiceRemovalDialogFragment.Listener {
     private DataManager dm;
 
+    TextToSpeech textToSpeech;
+    EditText text;
+    private BottomSheetBehavior<View> bottomSheetBehavior;
     @Override
     protected void onCreate(Bundle state) {
         EdgeToEdge.enable(this);
@@ -31,8 +46,28 @@ public final class MainActivity extends AppCompatActivity implements AvailableLa
         dm = new DataManager();
         setContentView(R.layout.frame);
         Repository.get().getPackageDirectoryLiveData().observe(this, this::onPackageDirectory);
-        if (state == null)
-            getSupportFragmentManager().beginTransaction().replace(R.id.frame, new AvailableLanguagesFragment(), "languages").add(new PlayerFragment(), "player").commit();
+//        if (state == null)
+//            getSupportFragmentManager().beginTransaction().replace(R.id.frame, new AvailableLanguagesFragment(), "languages").add(new PlayerFragment(), "player").commit();
+
+
+
+        MainFragment mainFragment = new MainFragment(new MainFragmentListener() {
+            @Override
+            public void onSettingsClick() {
+//                initBottomSheetBehavior();
+//                openBottomSheet();
+            }
+        });
+
+        final FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
+        transaction.replace(R.id.composeView, mainFragment);
+        transaction.addToBackStack(null);
+        transaction.commit();
+
+
+
+
+        // textToSpeech.speak(text.getText().toString(),TextToSpeech.QUEUE_FLUSH,null);
     }
 
     private void onPackageDirectory(PackageDirectory dir) {
@@ -81,4 +116,42 @@ public final class MainActivity extends AppCompatActivity implements AvailableLa
         super.onStart();
         Repository.get().refresh();
     }
+
+    private void initBottomSheetBehavior() {
+        View detailContainer = findViewById(R.id.settingsBottomSheet);
+        bottomSheetBehavior = BottomSheetBehavior.from(detailContainer);
+
+        // Expanded by default
+        bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+        bottomSheetBehavior.setSkipCollapsed(false);
+
+        bottomSheetBehavior.addBottomSheetCallback(new BottomSheetBehavior.BottomSheetCallback() {
+            @Override
+            public void onStateChanged(@NonNull View bottomSheet, int newState) {
+                if (newState == BottomSheetBehavior.STATE_HIDDEN) {
+                    finish();
+                    overridePendingTransition(0, 0);
+                }
+            }
+
+            @Override
+            public void onSlide(@NonNull View bottomSheet, float slideOffset) {
+                // no-op
+            }
+        });
+    }
+
+    // You can now use bottomSheetBehavior anywhere in MainActivity, e.g.:
+    private void collapseBottomSheet() {
+        if (bottomSheetBehavior != null) {
+            bottomSheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
+        }
+    }
+
+    private void openBottomSheet() {
+        if (bottomSheetBehavior != null) {
+            bottomSheetBehavior.setState(BottomSheetBehavior.STATE_EXPANDED);
+        }
+    }
+
 }

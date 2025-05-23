@@ -282,6 +282,7 @@ public final class PlayerFragment extends Fragment implements Player.Listener {
 
         @Override
         public void play(VoicePack v) {
+            Log.e("PLAYYYY", v.getTestMessage());
             stop();
             playerState.play(v);
         }
@@ -591,6 +592,8 @@ public final class PlayerFragment extends Fragment implements Player.Listener {
     }
 
     public void play(VoicePack v) {
+        Log.e("PLAYYYY-2",v.getTestMessage());
+
         stopPlayback();
         if (v.getEnabled(getActivity()) && v.isInstalled(getActivity()))
             ttsState.play(v);

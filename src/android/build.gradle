@@ -1,4 +1,7 @@
 buildscript {
+    ext {
+        kotlin_version = '2.1.21'
+    }
     repositories {
         google()
         mavenCentral()
@@ -6,6 +9,9 @@ buildscript {
 
     dependencies {
         classpath 'com.android.tools.build:gradle:8.9.2'
+        classpath 'com.google.gms:google-services:4.4.2'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+        classpath 'org.jetbrains.kotlin:compose-compiler-gradle-plugin:2.1.21'
     }
 }
 
@@ -15,7 +21,7 @@ allprojects {
         mavenCentral()
     }
 
-    ext.myMinSdkVersion = 19
+    ext.myMinSdkVersion = 21
     ext.myCompileSdkVersion = 35
     ext.myBuildToolsVersion = '35.0.0'
     ext.myNdkVersion = '25.1.8937393'

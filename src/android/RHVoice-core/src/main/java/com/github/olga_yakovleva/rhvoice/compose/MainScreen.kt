@@ -7,6 +7,7 @@ import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import com.github.olga_yakovleva.rhvoice.compose.actions.ActionsScreen
 import com.github.olga_yakovleva.rhvoice.compose.camera.CameraScreen
 import com.github.olga_yakovleva.rhvoice.compose.no_permission.NoPermissionScreen
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
@@ -45,11 +46,12 @@ private fun MainContent(
         ) {
             Text("Open settings")
         }
-        if (hasPermission) {
-            CameraScreen()
-        } else {
-            NoPermissionScreen(onRequestPermission)
-        }
+        ActionsScreen()
+//        if (hasPermission) {
+//            CameraScreen()
+//        } else {
+//            NoPermissionScreen(onRequestPermission)
+//        }
     }
 }
 

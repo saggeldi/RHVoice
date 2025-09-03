@@ -7,7 +7,9 @@ import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.navigation.compose.rememberNavController
 import com.github.olga_yakovleva.rhvoice.compose.actions.ActionsScreen
+import com.github.olga_yakovleva.rhvoice.compose.blind_navigator.Navigation
 import com.github.olga_yakovleva.rhvoice.compose.camera.CameraScreen
 import com.github.olga_yakovleva.rhvoice.compose.no_permission.NoPermissionScreen
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
@@ -39,14 +41,8 @@ private fun MainContent(
     Column(
         modifier = Modifier.fillMaxSize()
     ) {
-        Button(
-            onClick = {
-                onSettingsClick()
-            }
-        ) {
-            Text("Open settings")
-        }
-        ActionsScreen()
+
+        Navigation(navController = rememberNavController())
 //        if (hasPermission) {
 //            CameraScreen()
 //        } else {

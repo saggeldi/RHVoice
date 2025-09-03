@@ -54,8 +54,8 @@ public final class MainActivity extends AppCompatActivity implements AvailableLa
         MainFragment mainFragment = new MainFragment(new MainFragmentListener() {
             @Override
             public void onSettingsClick() {
-//                initBottomSheetBehavior();
-//                openBottomSheet();
+                initBottomSheetBehavior();
+                openBottomSheet();
             }
         });
 

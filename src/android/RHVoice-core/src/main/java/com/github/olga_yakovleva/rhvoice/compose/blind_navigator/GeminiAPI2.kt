@@ -15,7 +15,7 @@ import kotlinx.coroutines.withContext
 import java.io.IOException
 
 val ReadModel = GenerativeModel(
-    modelName = "gemini-1.5-flash",
+    modelName = "gemini-2.5-pro",//gemini-2.5-flash-lite
     apiKey = "AIzaSyBHXFpSnucyT2vJ8Oiy0YzCqEBW1cc4xsw",
     generationConfig = generationConfig {
         temperature = 0.2f
@@ -30,7 +30,7 @@ val ReadModel = GenerativeModel(
         SafetySetting(HarmCategory.SEXUALLY_EXPLICIT, BlockThreshold.NONE),
         SafetySetting(HarmCategory.DANGEROUS_CONTENT, BlockThreshold.NONE),
     ),
-    systemInstruction = content { text("your user is a blind person.\nfrom the input the the user about the think and then read the whole text from the image like from the book sign boards and others. Must be in turkmen language your full response please translate to turkmen language give me response in turkmen language") },
+    systemInstruction = content { text("your user is a blind person.\nfrom the input the the user about the think and then read the whole text from the image like from the book sign boards and others. Must be in turkmen language your full response please translate to turkmen language give me response in turkmen language. Do not return any english words only return turkmen words. Not return any markdown, only return about turkmen result in response. Give only on short sentence understandable for blind person road") },
 
     )
 

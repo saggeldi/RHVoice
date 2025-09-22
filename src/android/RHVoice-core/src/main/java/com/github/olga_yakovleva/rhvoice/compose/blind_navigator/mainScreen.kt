@@ -167,7 +167,7 @@ fun MainPage(navController: NavHostController) {
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "Kör Rejimi",
+                            text = "Körmekci Rejimi",
                             color = Color.White,
                             fontSize = 28.sp,
                             fontWeight = FontWeight.Bold
@@ -322,7 +322,7 @@ fun MainPage(navController: NavHostController) {
                             onClick = {
                                 val intent = Intent(
                                     Intent.ACTION_VIEW,
-                                    Uri.parse("https://www.youtube.com/watch?v=GD4iuPCIXTc&t=116s")
+                                    Uri.parse("https://www.youtube.com")
                                 )
                                 context.startActivity(intent)
                             },

@@ -16,9 +16,20 @@ interface MainFragmentListener {
     fun onSettingsClick()
 }
 
-class MainFragment(
-    private val listener: MainFragmentListener
-): Fragment() {
+class MainFragment : Fragment() {
+    private var listener: MainFragmentListener? = null
+    
+    companion object {
+        fun newInstance(listener: MainFragmentListener): MainFragment {
+            return MainFragment().apply {
+                this.listener = listener
+            }
+        }
+    }
+    
+    fun setListener(listener: MainFragmentListener) {
+        this.listener = listener
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -32,7 +43,11 @@ class MainFragment(
                         modifier = Modifier.fillMaxSize(),
                         color = MaterialTheme.colorScheme.background
                     ) {
-                        MainScreen(listener)
+                        MainScreen(listener ?: object : MainFragmentListener {
+                            override fun onSettingsClick() {
+                                // Default implementation - do nothing if no listener is set
+                            }
+                        })
                     }
                 }
             }

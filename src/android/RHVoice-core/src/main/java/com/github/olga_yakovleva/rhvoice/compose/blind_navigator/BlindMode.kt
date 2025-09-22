@@ -56,9 +56,11 @@ import androidx.core.content.ContextCompat
 import com.example.assistantapp.sendFrameToGemini2AI
 import com.example.assistantapp.sendMessageToGeminiAI
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import android.speech.tts.UtteranceProgressListener
 
 @Composable
 fun BlindModeScreen() {
@@ -87,7 +89,10 @@ fun BlindModeScreen() {
     val tts = remember { mutableStateOf<TextToSpeech?>(null) }
     var lastSpokenIndex by remember { mutableStateOf(0) }
     var lastProcessedTimestamp by remember { mutableStateOf(0L) }
-    val frameInterval = 12000 // Process a frame every 6.5 seconds
+    val frameInterval = 12000 // Process a frame every 12 seconds to balance responsiveness and API usage
+    val readingModeDelay = 2000 // Delay for reading mode capture to allow user positioning
+    val minIntervalBetweenCalls = 3000L // Minimum 3 seconds between any Gemini API calls
+    var lastGeminiCallTime by remember { mutableStateOf(0L) }
     var navigationPaused by remember { mutableStateOf(false) }
     var isMicActive by remember { mutableStateOf(false) }
     var chatResponse by remember { mutableStateOf("") }
@@ -102,11 +107,127 @@ fun BlindModeScreen() {
         }
     }
 
+    // Text processing buffer for better word boundaries
+    var textProcessingBuffer by remember { mutableStateOf("") }
+    val ttsQueue = remember { mutableListOf<String>() }
+    var isProcessingTTS by remember { mutableStateOf(false) }
+
+    // Function to chunk text properly for TTS with Turkmen language support
+    fun processTextForTTS(text: String): List<String> {
+        if (text.isBlank()) return emptyList()
+        
+        // Clean text first
+        val cleanText = text.trim().replace(Regex("\\s+"), " ")
+        
+        // Split by natural pause points, including Turkmen-specific patterns
+        val naturalBreaks = Regex(
+            "(?<=[.!?])\\s+|" +        // Sentence endings
+            "(?<=,)\\s+|" +            // Comma pauses
+            "(?<=;)\\s+|" +            // Semicolon pauses  
+            "(?<=:)\\s+|" +            // Colon pauses
+            "(?<=üçin)\\s+|" +         // Turkmen "for" - natural break
+            "(?<=bilen)\\s+|" +        // Turkmen "with" - natural break
+            "(?<=hem)\\s+|" +          // Turkmen "and" - natural break
+            "(?<=diýip)\\s+|" +        // Turkmen "saying" - natural break
+            "(?<=bolsa)\\s+"           // Turkmen "if/when" - natural break
+        )
+        
+        val segments = cleanText.split(naturalBreaks).filter { it.isNotBlank() }
+        
+        val chunks = mutableListOf<String>()
+        var currentChunk = ""
+        
+        for (segment in segments) {
+            val segmentLength = segment.length
+            
+            // Optimize chunk size for real-time speech
+            when {
+                // Very short segments - always add to current chunk
+                segmentLength <= 20 -> {
+                    currentChunk += if (currentChunk.isEmpty()) segment else " $segment"
+                }
+                // Medium segments - add if current chunk isn't too long
+                segmentLength <= 80 && currentChunk.length + segmentLength < 120 -> {
+                    currentChunk += if (currentChunk.isEmpty()) segment else " $segment"
+                }
+                // Long segments or chunk is getting full
+                else -> {
+                    if (currentChunk.isNotEmpty()) {
+                        chunks.add(currentChunk.trim())
+                    }
+                    
+                    // Break very long segments at word boundaries
+                    if (segmentLength > 150) {
+                        val words = segment.split(" ")
+                        var wordChunk = ""
+                        
+                        for (word in words) {
+                            if (wordChunk.length + word.length < 120) {
+                                wordChunk += if (wordChunk.isEmpty()) word else " $word"
+                            } else {
+                                if (wordChunk.isNotEmpty()) {
+                                    chunks.add(wordChunk.trim())
+                                }
+                                wordChunk = word
+                            }
+                        }
+                        
+                        currentChunk = if (wordChunk.isNotEmpty()) wordChunk else ""
+                    } else {
+                        currentChunk = segment
+                    }
+                }
+            }
+        }
+        
+        if (currentChunk.isNotEmpty()) {
+            chunks.add(currentChunk.trim())
+        }
+        
+        return chunks.filter { it.isNotBlank() }
+    }
+    
+    // Function to speak text with proper queue management
+    fun speakTextOptimized(text: String, queueMode: Int = TextToSpeech.QUEUE_ADD) {
+        if (text.isBlank()) return
+        
+        val chunks = processTextForTTS(text)
+        if (chunks.isEmpty()) return
+        
+        // For real-time navigation, clear queue if it's getting too long
+        if (queueMode == TextToSpeech.QUEUE_ADD && chunks.size > 3) {
+            tts.value?.stop()
+        }
+        
+        chunks.forEachIndexed { index, chunk ->
+            val mode = if (index == 0) queueMode else TextToSpeech.QUEUE_ADD
+            tts.value?.speak(chunk, mode, null, "tts_chunk_$index")
+        }
+    }
+
     LaunchedEffect(context) {
         tts.value = TextToSpeech(context) { status ->
             if (status != TextToSpeech.ERROR) {
                 tts.value?.language = Locale.US
-                tts.value?.setSpeechRate(1.5f) // Increase the speech rate
+                tts.value?.setSpeechRate(1.0f) // Faster speech rate for real-time navigation
+                tts.value?.setPitch(1.0f) // Standard pitch
+                
+                // Add utterance progress listener for better queue management
+                tts.value?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                    override fun onStart(utteranceId: String?) {
+                        isProcessingTTS = true
+                    }
+                    
+                    override fun onDone(utteranceId: String?) {
+                        isProcessingTTS = false
+                    }
+                    
+                    override fun onError(utteranceId: String?) {
+                        isProcessingTTS = false
+                        // Clear buffer on error to prevent stuck state
+                        textProcessingBuffer = ""
+                    }
+                })
             }
         }
     }
@@ -132,7 +253,7 @@ fun BlindModeScreen() {
                     val spokenText = matches[0]
                     coroutineScope.launch {
                         chatResponse = sendMessageToGeminiAI(spokenText, analysisResult)
-                        tts.value?.speak(chatResponse, TextToSpeech.QUEUE_FLUSH, null, null)
+                        speakTextOptimized(chatResponse, TextToSpeech.QUEUE_ADD )
                     }
                 }
             }
@@ -179,9 +300,33 @@ fun BlindModeScreen() {
                         capturedImage = bitmap
                         coroutineScope.launch {
                             readingModeResult = ""
+                            var readingLastSpokenIndex = 0
+                            
+                            // Add delay for reading mode to allow user to position camera properly
+                            delay(readingModeDelay.toLong())
+                            lastGeminiCallTime = System.currentTimeMillis()
+                            
                             sendFrameToGemini2AI(bitmap, { partialResult ->
                                 readingModeResult += partialResult
-                                tts.value?.speak(partialResult, TextToSpeech.QUEUE_ADD, null, null)
+                                
+                                // Only process new text that hasn't been spoken yet
+                                val newReadingText = readingModeResult.substring(readingLastSpokenIndex).trim()
+                                if (newReadingText.isNotEmpty()) {
+                                    textProcessingBuffer += if (textProcessingBuffer.isEmpty()) newReadingText else " $newReadingText"
+                                    
+                                    // Process buffered text when we have enough for proper chunking
+                                    // Also check for common Turkmen word endings and punctuation
+                                    if (textProcessingBuffer.length > 50 || 
+                                        partialResult.matches(Regex(".*[.!?;,]\\s*$")) ||
+                                        textProcessingBuffer.split(" ").size >= 8) {
+                                        val textToSpeak = textProcessingBuffer.trim()
+                                        if (textToSpeak.isNotEmpty()) {
+                                            speakTextOptimized(textToSpeak, TextToSpeech.QUEUE_ADD)
+                                            readingLastSpokenIndex = readingModeResult.length
+                                            textProcessingBuffer = ""
+                                        }
+                                    }
+                                }
                             }, { error ->
                                 // Handle error
                             })
@@ -193,15 +338,36 @@ fun BlindModeScreen() {
             } else if (!navigationPaused) {
                 CameraPreviewWithAnalysis { imageProxy ->
                     val currentTimestamp = System.currentTimeMillis()
-                    if (currentTimestamp - lastProcessedTimestamp >= frameInterval) {
+                    val timeSinceLastProcess = currentTimestamp - lastProcessedTimestamp
+                    val timeSinceLastGeminiCall = currentTimestamp - lastGeminiCallTime
+                    
+                    if (timeSinceLastProcess >= frameInterval && timeSinceLastGeminiCall >= minIntervalBetweenCalls) {
                         coroutineScope.launch {
                             val bitmap = imageProxy.toBitmap()
                             if (bitmap != null) {
+                                lastGeminiCallTime = currentTimestamp
                                 sendFrameToGeminiAI(bitmap, { partialResult ->
                                     analysisResult += " $partialResult"
-                                    val newText = analysisResult.substring(lastSpokenIndex)
-                                    tts.value?.speak(newText, TextToSpeech.QUEUE_ADD, null, null)
-                                    lastSpokenIndex = analysisResult.length
+                                    
+                                    // Only process new text that hasn't been spoken yet
+                                    val newText = analysisResult.substring(lastSpokenIndex).trim()
+                                    if (newText.isNotEmpty()) {
+                                        textProcessingBuffer += if (textProcessingBuffer.isEmpty()) newText else " $newText"
+                                        
+                                        // Process navigation text more frequently for immediate feedback
+                                        // Prioritize immediate navigation feedback
+                                        if (textProcessingBuffer.length > 25 || 
+                                            partialResult.matches(Regex(".*[.!?,;]\\s*$")) ||
+                                            textProcessingBuffer.split(" ").size >= 5) {
+                                            
+                                            val textToSpeak = textProcessingBuffer.trim()
+                                            if (textToSpeak.isNotEmpty()) {
+                                                speakTextOptimized(textToSpeak, TextToSpeech.QUEUE_ADD)
+                                                lastSpokenIndex = analysisResult.length
+                                                textProcessingBuffer = ""
+                                            }
+                                        }
+                                    }
                                 }, { error ->
                                     // Handle error here
                                 })
@@ -234,15 +400,21 @@ fun BlindModeScreen() {
                             isAssistantMode = navigationPaused
                             if (navigationPaused) {
                                 tts.value?.stop()
+                                textProcessingBuffer = "" // Clear buffer on mode change
+                                lastSpokenIndex = analysisResult.length // Reset tracking index
+                                lastGeminiCallTime = 0L // Reset API call timing
                                 currentMode = "assistant"
                                 overlayText = ""
-                                tts.value?.speak("Kömekçi rejimi işjeňleşdirildi.", TextToSpeech.QUEUE_FLUSH, null, null)
+                                speakTextOptimized("Kömekçi rejimi işjeňleşdirildi.", TextToSpeech.QUEUE_FLUSH)
                             } else {
                                 tts.value?.stop()
+                                textProcessingBuffer = "" // Clear buffer on mode change
+                                lastSpokenIndex = analysisResult.length // Reset tracking index
+                                lastGeminiCallTime = 0L // Reset API call timing
                                 currentMode = "navigation"
                                 overlayText = ""
                                 chatResponse = ""
-                                tts.value?.speak("Kömekçi rejimi ýapyldy.", TextToSpeech.QUEUE_FLUSH, null, null)
+                                speakTextOptimized("Kömekçi rejimi ýapyldy.", TextToSpeech.QUEUE_FLUSH)
                             }
                         }
                     },
@@ -251,28 +423,37 @@ fun BlindModeScreen() {
                             isReadingMode = !isReadingMode
                             if (isReadingMode) {
                                 tts.value?.stop()
+                                textProcessingBuffer = "" // Clear buffer on mode change
+                                lastSpokenIndex = analysisResult.length // Reset tracking index
+                                lastGeminiCallTime = 0L // Reset API call timing
                                 currentMode = "reading"
                                 overlayText = ""
                                 navigationPaused = true
-                                tts.value?.speak("Okamak rejimine girýäris", TextToSpeech.QUEUE_FLUSH, null, null)
+                                speakTextOptimized("Okamak rejimine girýäris", TextToSpeech.QUEUE_FLUSH)
                             } else {
                                 tts.value?.stop()
+                                textProcessingBuffer = "" // Clear buffer on mode change
+                                lastSpokenIndex = analysisResult.length // Reset tracking index
+                                lastGeminiCallTime = 0L // Reset API call timing
                                 currentMode = "navigation"
                                 overlayText = ""
                                 readingModeResult = ""
                                 navigationPaused = false
-                                tts.value?.speak("Okamak rejiminden çykýarys", TextToSpeech.QUEUE_FLUSH, null, null)
+                                speakTextOptimized("Okamak rejiminden çykýarys", TextToSpeech.QUEUE_FLUSH)
                             }
                         } else {
                             // Exit assistant mode and enter navigation mode
                             tts.value?.stop()
+                            textProcessingBuffer = "" // Clear buffer on mode change
+                            lastSpokenIndex = analysisResult.length // Reset tracking index
+                            lastGeminiCallTime = 0L // Reset API call timing
                             isAssistantMode = false
                             navigationPaused = false
                             isReadingMode = false
                             currentMode = "navigation"
                             overlayText = ""
                             chatResponse = ""
-                            tts.value?.speak("Kömekçi rejiminden çykyp, nawigasiýa rejimine girýäris", TextToSpeech.QUEUE_FLUSH, null, null)
+                            speakTextOptimized("Kömekçi rejiminden çykyp, nawigasiýa rejimine girýäris", TextToSpeech.QUEUE_FLUSH)
                         }
                     }
                 )

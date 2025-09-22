@@ -20,6 +20,7 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.FragmentTransaction;
 
+import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.Bundle;
 import android.speech.tts.TextToSpeech;
@@ -35,6 +36,8 @@ import java.util.Locale;
 
 public final class MainActivity extends AppCompatActivity implements AvailableLanguagesFragment.Listener, AvailableVoicesFragment.Listener, ConfirmVoiceRemovalDialogFragment.Listener {
     private DataManager dm;
+    private static final String PREFS_NAME = "RHVoicePrefs";
+    private static final String PREF_FIRST_LAUNCH = "first_launch";
 
     TextToSpeech textToSpeech;
     EditText text;
@@ -46,12 +49,54 @@ public final class MainActivity extends AppCompatActivity implements AvailableLa
         dm = new DataManager();
         setContentView(R.layout.frame);
         Repository.get().getPackageDirectoryLiveData().observe(this, this::onPackageDirectory);
-//        if (state == null)
-//            getSupportFragmentManager().beginTransaction().replace(R.id.frame, new AvailableLanguagesFragment(), "languages").add(new PlayerFragment(), "player").commit();
+        
+        // Check if this is the first time opening the app
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        boolean isFirstLaunch = prefs.getBoolean(PREF_FIRST_LAUNCH, true);
+        
+        if (state == null) {
+            if (isFirstLaunch) {
+                // First time opening - show language selection
+                getSupportFragmentManager().beginTransaction()
+                    .replace(R.id.frame, new AvailableLanguagesFragment(), "languages")
+                    .add(new PlayerFragment(), "player")
+                    .commit();
+                
+                // Mark as no longer first launch
+                SharedPreferences.Editor editor = prefs.edit();
+                editor.putBoolean(PREF_FIRST_LAUNCH, false);
+                editor.apply();
+            } else {
+                // Not first time - show main fragment
+                showMainFragment();
+            }
+        } else {
+            // Restore state - check if main fragment exists, if not create it
+            MainFragment existingFragment = (MainFragment) getSupportFragmentManager().findFragmentById(R.id.composeView);
+            if (existingFragment == null) {
+                showMainFragment();
+            } else {
+                // Fragment exists, just set the listener
+                existingFragment.setListener(new MainFragmentListener() {
+                    @Override
+                    public void onSettingsClick() {
+                        initBottomSheetBehavior();
+                        openBottomSheet();
+                    }
+                });
+            }
+        }
+        
+        // textToSpeech.speak(text.getText().toString(),TextToSpeech.QUEUE_FLUSH,null);
+    }
 
-
-
-        MainFragment mainFragment = new MainFragment(new MainFragmentListener() {
+    private void onPackageDirectory(PackageDirectory dir) {
+        dm.setPackageDirectory(dir);
+        dm.scheduleSync(this, false);
+    }
+    
+    private void showMainFragment() {
+        MainFragment mainFragment = MainFragment.Companion.newInstance(new MainFragmentListener() {
             @Override
             public void onSettingsClick() {
                 initBottomSheetBehavior();
@@ -60,19 +105,8 @@ public final class MainActivity extends AppCompatActivity implements AvailableLa
         });
 
         final FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
-        transaction.replace(R.id.composeView, mainFragment);
-        transaction.addToBackStack(null);
+        transaction.replace(R.id.composeView, mainFragment, "main");
         transaction.commit();
-
-
-
-
-        // textToSpeech.speak(text.getText().toString(),TextToSpeech.QUEUE_FLUSH,null);
-    }
-
-    private void onPackageDirectory(PackageDirectory dir) {
-        dm.setPackageDirectory(dir);
-        dm.scheduleSync(this, false);
     }
 
     public void onAccentSelected(VoiceAccent accent) {
